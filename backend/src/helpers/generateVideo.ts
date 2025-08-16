@@ -8,6 +8,9 @@ type TProps = {
 
 const generateVideo = async ({ fileId, classNames }: TProps) => {
   try {
+    console.log("ENTR");
+    console.log(classNames);
+    console.log(typeof classNames);
     const filePath = path.join(__dirname, `../temp/manim-code-${fileId}.py`);
     const manimPath = path.join(__dirname, "../manim_env/Scripts/manim.exe");
     const outputPath = path.join(__dirname, "../media_output");
@@ -47,15 +50,15 @@ const generateVideo = async ({ fileId, classNames }: TProps) => {
             className
           ) + ".mp4"
       ),
-    };
+    } as const;
   } catch (err) {
     console.log("Catch generateVideo :", err);
 
     return {
       success: false,
       message: "Error during production of video",
-      data: err,
-    };
+      data: err as Error,
+    } as const;
   }
 };
 

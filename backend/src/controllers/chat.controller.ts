@@ -7,6 +7,21 @@ import { XMLParser } from "fast-xml-parser";
 import generateVideo from "../helpers/generateVideo";
 import path from "path";
 
+type TNDJSONStream =
+  | {
+      type: "message";
+      content: string;
+    }
+  | {
+      type: "code";
+      content: string;
+      language: string;
+    }
+  | {
+      type: "classNames";
+      content: string[];
+    };
+
 export const chat = async (req: Request, res: Response) => {
   const chatSchema = z.object({
     messages: z
@@ -49,7 +64,7 @@ export const chat = async (req: Request, res: Response) => {
           content: message.text,
         })),
         model: "claude-4-sonnet-20250514",
-        max_tokens: 1000,
+        max_tokens: 8000,
       })
       .on("text", (text) => {
         console.log(text);
@@ -63,91 +78,94 @@ export const chat = async (req: Request, res: Response) => {
       "";
     console.log(text);
 
-    // type TMessage =
-    //   | {
-    //       chatman_message?: string;
-    //       chatman_code: string;
-    //       chatman_classNames: string;
-    //     }
-    //   | {
-    //       chatman_message: string;
-    //     };
+    const validJSONArray = text.split("\n");
+    let pythonCode = "";
+    let classNames: string[] = [];
 
-    // type TRootMessage = {
-    //   chatman_response: TMessage;
-    // };
+    for (const validJSON of validJSONArray) {
+      if (!validJSON.trim()) {
+        continue;
+      }
 
-    // const parser = new XMLParser();
-    // const message = parser.parse(text) as TRootMessage;
+      const message = JSON.parse(validJSON) as TNDJSONStream;
 
-    // // console.log(message);
+      console.log("validJSON");
+      console.log(validJSON);
 
-    // // save message to a script
-    // if ("chatman_code" in message.chatman_response) {
-    //   const id = Date.now() + Math.floor(Math.random() * 100000);
-    //   const tempDir = path.join(__dirname, "../temp");
-    //   const scriptPath = path.join(tempDir, `manim-code-${id}.py`);
+      if (message.type === "code") {
+        pythonCode += message.content;
+      }
 
-    //   if (!fs.existsSync(tempDir)) {
-    //     fs.mkdirSync(tempDir, { recursive: true });
-    //   }
+      if (message.type === "classNames") {
+        classNames = message.content;
+      }
+    }
 
-    //   fs.writeFileSync(scriptPath, message.chatman_response.chatman_code);
+    if (pythonCode.trim()) {
+      const id = Date.now() + Math.floor(Math.random() * 100000);
+      const tempDir = path.join(__dirname, "../temp");
+      const scriptPath = path.join(tempDir, `manim-code-${id}.py`);
 
-    //   // call codeToVideo with script path
-    //   const result = await generateVideo({
-    //     fileId: id.toString(),
-    //     classNames: JSON.parse(message.chatman_response.chatman_classNames),
-    //   });
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
 
-    //   if (!result.success) {
-    //     throw new Error(result.message);
-    //   }
+      fs.writeFileSync(scriptPath, pythonCode);
 
-    //   for (const videoPath of result.data as string[]) {
-    //     const videoBuffer = fs.readFileSync(videoPath);
-    //     const base64Video = videoBuffer.toString("base64");
-    //     const dataUrl = `data:video/mp4;base64,${base64Video}`;
+      // call generateVideo with script path
+      const result = await generateVideo({
+        fileId: id.toString(),
+        classNames,
+      });
 
-    //     res.write(
-    //       `event: video\ndata: ${JSON.stringify({
-    //         videoUrl: dataUrl,
-    //         fileId: id.toString(),
-    //         message: "Video generated successfully",
-    //       })}\n\n`
-    //     );
+      if (!result.success) {
+        throw new Error(result.message);
+      }
 
-    //     console.log("videoPath : ");
-    //     console.log(videoPath);
-    //     console.log(path.join(videoPath, "../../../"));
+      for (const videoPath of result.data) {
+        const videoBuffer = fs.readFileSync(videoPath);
+        const base64Video = videoBuffer.toString("base64");
+        const dataUrl = `data:video/mp4;base64,${base64Video}`;
 
-    //     console.log("joined path : ");
-    //     console.log(videoPath.split("\\").reverse()[2]);
-    //     console.log(
-    //       path.join(
-    //         videoPath,
-    //         `../../manim-code-${
-    //           videoPath.split("\\").reverse()[2].split("-")[2]
-    //         }`
-    //       )
-    //     );
+        res.write(
+          `event: video\ndata: ${JSON.stringify({
+            videoUrl: dataUrl,
+            fileId: id.toString(),
+            message: "Video generated successfully",
+          })}\n\n`
+        );
 
-    //     fs.rmSync(
-    //       path.join(
-    //         videoPath,
-    //         `../../../manim-code-${
-    //           videoPath.split("\\").reverse()[2].split("-")[2]
-    //         }`
-    //       ),
-    //       { recursive: true, force: true }
-    //     );
-    //   }
+        console.log("videoPath : ");
+        console.log(videoPath);
+        console.log(path.join(videoPath, "../../../"));
 
-    //   // delete script from temp
-    //   if (existsSync(scriptPath)) {
-    //     fs.unlinkSync(scriptPath);
-    //   }
-    // }
+        console.log("joined path : ");
+        console.log(videoPath.split("\\").reverse()[2]);
+        console.log(
+          path.join(
+            videoPath,
+            `../../manim-code-${
+              videoPath.split("\\").reverse()[2].split("-")[2]
+            }`
+          )
+        );
+      }
+
+      fs.rmSync(
+        path.join(
+          result.data[0],
+          `../../../manim-code-${
+            result.data[0].split("\\").reverse()[2].split("-")[2]
+          }`
+        ),
+        { recursive: true, force: true }
+      );
+
+      // delete script from temp
+      if (existsSync(scriptPath)) {
+        fs.unlinkSync(scriptPath);
+      }
+    }
 
     res.write("event: end\ndata: [DONE]\n\n");
     res.end();

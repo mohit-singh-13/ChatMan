@@ -56,7 +56,7 @@ Example 1 - Streaming Message and Code:
 {"type":"code","language":"python","content":"    arrow2 = Arrow(backend_box.get_right(), database_box.get_left(), color=YELLOW)\\n"}
 {"type":"code","language":"python","content":"    self.play(Create(arrow2))\\n"}
 {"type":"code","language":"python","content":"    self.wait(2)"}
-{"type":"classNames","content":["SystemArchitecture"]}
+{"type":"classNames","content":'["SystemArchitecture"]'}
 
 Example 2 - Streaming Message Only:
 {"type":"message","content":"Hello! I'm ChatMan, "}

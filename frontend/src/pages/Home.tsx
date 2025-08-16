@@ -54,12 +54,18 @@ type TNDJSONStream =
       content: string;
     };
 
+type TVideoBase64 = {
+  fileId: string;
+  videoUrl: string;
+  message: string;
+};
+
 const Home = () => {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(models[0].value);
   const [messages, setMessages] = useState<TMessage[]>([]);
   const [streamingMessage, setStreamingMessage] = useState("");
-  const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [videoUrls, setVideoUrls] = useState<TVideoBase64[]>([]);
   const [status, setStatus] = useState<ChatStatus>("ready");
   const [welcomeMessage, setWelcomeMessage] = useState({
     heading: "Welcome to ChatMan!",
@@ -88,6 +94,7 @@ const Home = () => {
 
       let fullResponse = "";
       let buffer = "";
+      let videoUrl = "";
 
       while (true) {
         const { value, done } = await reader.read();
@@ -98,10 +105,15 @@ const Home = () => {
         }
 
         const lines = value.split("\n");
-        console.log(lines)
+        console.log("lines");
+        console.log(lines);
 
         for (const line of lines) {
-          if (line.startsWith("event: data") || line.startsWith("event: end")) {
+          if (
+            line.startsWith("event: data") ||
+            line.startsWith("event: end") ||
+            line.startsWith("event: video")
+          ) {
             continue;
           } else if (line.startsWith("data: ")) {
             const data = line.slice(6);
@@ -112,6 +124,24 @@ const Home = () => {
                 { role: "assistant", text: fullResponse },
               ]);
               setStreamingMessage("");
+            }
+
+            if (
+              data.includes("videoUrl") ||
+              (data.includes("fileId") && data.includes("message"))
+            ) {
+              videoUrl += data;
+
+              console.log("VIDE URL");
+              console.log(videoUrl);
+
+              if (videoUrl.endsWith('"}')) {
+                const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
+                setVideoUrls((prev) => [...prev, video]);
+                videoUrl = "";
+              }
+
+              continue;
             }
 
             buffer += data;
@@ -129,6 +159,24 @@ const Home = () => {
               buffer = "";
             }
           } else {
+            if (
+              line.includes("videoUrl") ||
+              (line.includes("fileId") && line.includes("message"))
+            ) {
+              videoUrl += line;
+
+              console.log("VIDE URL");
+              console.log(videoUrl);
+
+              if (videoUrl.endsWith('"}')) {
+                const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
+                setVideoUrls((prev) => [...prev, video]);
+                videoUrl = "";
+              }
+
+              continue;
+            }
+
             buffer += line;
 
             if (buffer.endsWith('"}')) {
@@ -144,7 +192,8 @@ const Home = () => {
               buffer = "";
             }
           }
-          console.log(fullResponse)
+          console.log("fullResponse");
+          console.log(fullResponse);
         }
       }
     } catch (err) {
@@ -153,22 +202,20 @@ const Home = () => {
     }
   };
 
-  console.log(messages)
-
   return (
     <div className="bg-gray-100">
       {videoUrls.length > 0 && (
         <div className="mt-4 space-y-4">
-          {videoUrls.map((url, index) => (
+          {videoUrls.map((video) => (
             <video
-              key={index}
+              key={video.fileId}
               controls
               className="w-full max-w-md mx-auto"
               preload="metadata"
             >
-              <source src={url} type="video/mp4" />
-              <source src={url} type="video/webm" />
-              <source src={url} type="video/ogg" />
+              <source src={video.videoUrl} type="video/mp4" />
+              <source src={video.videoUrl} type="video/webm" />
+              <source src={video.videoUrl} type="video/ogg" />
               Your browser does not support the video tag.
             </video>
           ))}
@@ -208,8 +255,6 @@ const Home = () => {
               {status == "submitted" && <Loader />}
             </ConversationContent>
             <ConversationScrollButton />
-            {videoUrls.length > 0 &&
-              videoUrls.map((url) => <video src={url} />)}
           </Conversation>
 
           <PromptInput onSubmit={handleSubmit} className="mt-4">
