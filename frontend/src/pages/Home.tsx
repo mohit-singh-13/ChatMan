@@ -17,21 +17,11 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { useState } from "react";
-import { useChat } from "@ai-sdk/react";
 import { Response } from "@/components/ai-elements/response";
-import {
-  Source,
-  Sources,
-  SourcesContent,
-  SourcesTrigger,
-} from "@/components/ai-elements/source";
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
 import { Loader } from "@/components/ai-elements/loader";
-import { DefaultChatTransport } from "ai";
+import Container from "@/components/custom/Container";
+import { type ChatStatus } from "ai";
+import axios from "axios";
 
 const models = [
   {
@@ -44,35 +34,148 @@ const models = [
   },
 ];
 
+type TMessage = {
+  text: string;
+  role: "user" | "assistant";
+};
+
+type TNDJSONStream =
+  | {
+      type: "message";
+      content: string;
+    }
+  | {
+      type: "code";
+      content: string;
+      language: string;
+    }
+  | {
+      type: "classNames";
+      content: string;
+    };
+
 const Home = () => {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(models[0].value);
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/mohit" }),
-  });
+  const [messages, setMessages] = useState<TMessage[]>([]);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [status, setStatus] = useState<ChatStatus>("ready");
   const [welcomeMessage, setWelcomeMessage] = useState({
     heading: "Welcome to ChatMan!",
     content: "You're one prompt away from your amazing video...",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) {
-      sendMessage(
-        { text: input },
-        {
-          body: {
-            model: model,
-          },
-        }
+
+    setStatus("submitted");
+    setInput("");
+    setMessages((prev) => [...prev, { text: input, role: "user" }]);
+
+    const messagesToSend = [...messages, { text: input, role: "user" }];
+
+    try {
+      const response = await axios.post<ReadableStream>(
+        "http://localhost:8080/api/chat",
+        { messages: messagesToSend },
+        { responseType: "stream", adapter: "fetch" }
       );
-      setInput("");
+
+      setStatus("streaming");
+      const stream = response.data;
+      const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+
+      let fullResponse = "";
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) {
+          setStatus("ready");
+          break;
+        }
+
+        const lines = value.split("\n");
+        console.log(lines)
+
+        for (const line of lines) {
+          if (line.startsWith("event: data") || line.startsWith("event: end")) {
+            continue;
+          } else if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+
+            if (data === "[DONE]") {
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", text: fullResponse },
+              ]);
+              setStreamingMessage("");
+            }
+
+            buffer += data;
+
+            if (buffer.endsWith('"}')) {
+              const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
+
+              if (validNDJSON.type === "message") {
+                fullResponse += validNDJSON.content + "\n";
+                setStreamingMessage(
+                  (prev) => prev + validNDJSON.content + "\n"
+                );
+              }
+
+              buffer = "";
+            }
+          } else {
+            buffer += line;
+
+            if (buffer.endsWith('"}')) {
+              const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
+
+              if (validNDJSON.type === "message") {
+                fullResponse += validNDJSON.content + "\n";
+                setStreamingMessage(
+                  (prev) => prev + validNDJSON.content + "\n"
+                );
+              }
+
+              buffer = "";
+            }
+          }
+          console.log(fullResponse)
+        }
+      }
+    } catch (err) {
+      console.log(err);
+      setStatus("error");
     }
   };
 
+  console.log(messages)
+
   return (
-    <div>
-      <div className="max-w-4xl mx-auto p-6 relative size-full h-screen">
+    <div className="bg-gray-100">
+      {videoUrls.length > 0 && (
+        <div className="mt-4 space-y-4">
+          {videoUrls.map((url, index) => (
+            <video
+              key={index}
+              controls
+              className="w-full max-w-md mx-auto"
+              preload="metadata"
+            >
+              <source src={url} type="video/mp4" />
+              <source src={url} type="video/webm" />
+              <source src={url} type="video/ogg" />
+              Your browser does not support the video tag.
+            </video>
+          ))}
+        </div>
+      )}
+
+      <Container>
         <div className="flex flex-col h-full">
           <Conversation className="h-full relative">
             <ConversationContent>
@@ -86,67 +189,27 @@ const Home = () => {
                   </p>
                 </div>
               )}
-              {messages.map((message) => (
-                <div key={message.id}>
-                  {message.role === "assistant" && (
-                    <Sources>
-                      {message.parts.map((part, i) => {
-                        switch (part.type) {
-                          case "source-url":
-                            return (
-                              <>
-                                <SourcesTrigger
-                                  count={
-                                    message.parts.filter(
-                                      (part) => part.type === "source-url"
-                                    ).length
-                                  }
-                                />
-                                <SourcesContent key={`${message.id}-${i}`}>
-                                  <Source
-                                    key={`${message.id}-${i}`}
-                                    href={part.url}
-                                    title={part.url}
-                                  />
-                                </SourcesContent>
-                              </>
-                            );
-                        }
-                      })}
-                    </Sources>
-                  )}
-                  <Message from={message.role} key={message.id}>
+              {messages.map((message, index) => (
+                <div key={index}>
+                  <Message from={message.role} key={index}>
                     <MessageContent>
-                      {message.parts.map((part, i) => {
-                        switch (part.type) {
-                          case "text":
-                            return (
-                              <Response key={`${message.id}-${i}`}>
-                                {part.text}
-                              </Response>
-                            );
-                          case "reasoning":
-                            return (
-                              <Reasoning
-                                key={`${message.id}-${i}`}
-                                className="w-full"
-                                isStreaming={status === "streaming"}
-                              >
-                                <ReasoningTrigger />
-                                <ReasoningContent>{part.text}</ReasoningContent>
-                              </Reasoning>
-                            );
-                          default:
-                            return null;
-                        }
-                      })}
+                      <Response>{message.text}</Response>
                     </MessageContent>
                   </Message>
                 </div>
               ))}
-              {status === "submitted" && <Loader />}
+              {streamingMessage && (
+                <Message from="assistant">
+                  <MessageContent>
+                    <Response>{streamingMessage}</Response>
+                  </MessageContent>
+                </Message>
+              )}
+              {status == "submitted" && <Loader />}
             </ConversationContent>
             <ConversationScrollButton />
+            {videoUrls.length > 0 &&
+              videoUrls.map((url) => <video src={url} />)}
           </Conversation>
 
           <PromptInput onSubmit={handleSubmit} className="mt-4">
@@ -177,11 +240,16 @@ const Home = () => {
                   </PromptInputModelSelectContent>
                 </PromptInputModelSelect>
               </PromptInputTools>
-              <PromptInputSubmit disabled={!input} status={status} />
+              <PromptInputSubmit
+                disabled={
+                  !input || status === "submitted" || status === "streaming"
+                }
+                status={status}
+              />
             </PromptInputToolbar>
           </PromptInput>
         </div>
-      </div>
+      </Container>
     </div>
   );
 };
