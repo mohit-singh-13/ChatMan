@@ -6,6 +6,7 @@ import fs, { existsSync } from "fs";
 import { XMLParser } from "fast-xml-parser";
 import generateVideo from "../helpers/generateVideo";
 import path from "path";
+import OpenAI from "openai";
 
 type TNDJSONStream =
   | {
@@ -24,6 +25,9 @@ type TNDJSONStream =
 
 export const chat = async (req: Request, res: Response) => {
   const chatSchema = z.object({
+    model: z.enum(["CLAUDE", "DEEPSEEK"], {
+      error: "We don't support this model yet",
+    }),
     messages: z
       .array(
         z.object({
@@ -41,43 +45,73 @@ export const chat = async (req: Request, res: Response) => {
 
     res.status(400).json({
       success: false,
-      message: "Invalid inputs",
+      message: parsedInput.error.issues[0].message,
     });
     return;
   }
 
-  const { messages } = parsedInput.data;
+  const { model, messages } = parsedInput.data;
 
   try {
-    const client = new Anthropic();
-
     res.setHeader("Content-Type", "text/event-stream"); // SSE
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    const response = client.messages
-      .stream({
-        system: SYSTEM_PROMPT,
-        messages: messages.map((message) => ({
-          role: message.role,
-          content: message.text,
-        })),
-        model: "claude-4-sonnet-20250514",
-        max_tokens: 8000,
-      })
-      .on("text", (text) => {
-        console.log(text);
-        res.write(`event: data\ndata: ${text}\n\n`);
+    let text = "";
+
+    if (model === "CLAUDE") {
+      const client = new Anthropic();
+
+      const response = client.messages
+        .stream({
+          system: SYSTEM_PROMPT,
+          messages: messages.map((message) => ({
+            role: message.role,
+            content: message.text,
+          })),
+          model: "claude-4-sonnet-20250514",
+          max_tokens: 8000,
+        })
+        .on("text", (text) => {
+          console.log(text);
+          res.write(`event: data\ndata: ${text}\n\n`);
+        });
+
+      const finalMessage = await response.finalMessage();
+      text =
+        (finalMessage.content[0].type === "text" &&
+          finalMessage.content[0].text) ||
+        "";
+
+      console.log(text);
+    } else if (model === "DEEPSEEK") {
+      console.log("DEEEPSEEEEK");
+      const openai = new OpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: process.env.DEEPSEEK_OPEN_ROUTER_API_KEY,
       });
 
-    const finalMessage = await response.finalMessage();
-    const text =
-      (finalMessage.content[0].type === "text" &&
-        finalMessage.content[0].text) ||
-      "";
-    console.log(text);
+      const stream = await openai.chat.completions.create({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...messages.map((message) => ({
+            role: message.role,
+            content: message.text,
+          })),
+        ],
+        model: "deepseek/deepseek-chat-v3-0324:free",
+        stream: true,
+      });
 
+      console.log(stream);
+
+      for await (const event of stream) {
+        console.log(event.choices[0].delta.content);
+        res.write(`event: data\ndata: ${event.choices[0].delta.content}\n\n`);
+        text += event.choices[0].delta.content;
+      }
+    }
     const validJSONArray = text.split("\n");
     let pythonCode = "";
     let classNames: string[] = [];

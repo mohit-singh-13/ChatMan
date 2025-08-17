@@ -26,11 +26,11 @@ import axios from "axios";
 const models = [
   {
     name: "Claude Sonnet 4",
-    value: "openai/gpt-4o",
+    value: "CLAUDE",
   },
   {
     name: "Deepseek R1",
-    value: "deepseek/deepseek-r1",
+    value: "DEEPSEEK",
   },
 ];
 
@@ -84,7 +84,7 @@ const Home = () => {
     try {
       const response = await axios.post<ReadableStream>(
         "http://localhost:8080/api/chat",
-        { messages: messagesToSend },
+        { model, messages: messagesToSend },
         { responseType: "stream", adapter: "fetch" }
       );
 
