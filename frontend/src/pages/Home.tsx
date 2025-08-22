@@ -22,6 +22,8 @@ import { Loader } from "@/components/ai-elements/loader";
 import Container from "@/components/custom/Container";
 import { type ChatStatus } from "ai";
 import axios from "axios";
+import CustomLoader from "@/components/custom/CustomLoader";
+import Preview from "@/components/custom/Preview";
 
 const models = [
   {
@@ -54,7 +56,7 @@ type TNDJSONStream =
       content: string;
     };
 
-type TVideoBase64 = {
+export type TVideoBase64 = {
   fileId: string;
   videoUrl: string;
   message: string;
@@ -67,10 +69,12 @@ const Home = () => {
   const [streamingMessage, setStreamingMessage] = useState("");
   const [videoUrls, setVideoUrls] = useState<TVideoBase64[]>([]);
   const [status, setStatus] = useState<ChatStatus>("ready");
-  const [welcomeMessage, setWelcomeMessage] = useState({
+  const [welcomeMessage] = useState({
     heading: "Welcome to ChatMan!",
     content: "You're one prompt away from your amazing video...",
   });
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +99,7 @@ const Home = () => {
       let fullResponse = "";
       let buffer = "";
       let videoUrl = "";
+      let codeEncountered = false;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -109,7 +114,10 @@ const Home = () => {
         console.log(lines);
 
         for (const line of lines) {
-          if (
+          if (line.startsWith("event: loading")) {
+            setLoadingPreview(true);
+            continue;
+          } else if (
             line.startsWith("event: data") ||
             line.startsWith("event: end") ||
             line.startsWith("event: video")
@@ -119,11 +127,13 @@ const Home = () => {
             const data = line.slice(6);
 
             if (data === "[DONE]") {
+              setLoadingPreview(false);
               setMessages((prev) => [
                 ...prev,
                 { role: "assistant", text: fullResponse },
               ]);
               setStreamingMessage("");
+              continue;
             }
 
             if (
@@ -138,6 +148,7 @@ const Home = () => {
               if (videoUrl.endsWith('"}')) {
                 const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
                 setVideoUrls((prev) => [...prev, video]);
+                setIsPreviewOpen(true);
                 videoUrl = "";
               }
 
@@ -149,11 +160,28 @@ const Home = () => {
             if (buffer.endsWith('"}')) {
               const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
 
-              if (validNDJSON.type === "message") {
-                fullResponse += validNDJSON.content + "\n";
-                setStreamingMessage(
-                  (prev) => prev + validNDJSON.content + "\n"
-                );
+              if (
+                (validNDJSON.type === "classNames" ||
+                  validNDJSON.type === "message") &&
+                codeEncountered
+              ) {
+                fullResponse += "```" + "\n";
+                setStreamingMessage((prev) => prev + "```" + "\n");
+                codeEncountered = false;
+              }
+
+              if (
+                validNDJSON.type === "message" ||
+                validNDJSON.type === "code"
+              ) {
+                if (!codeEncountered && validNDJSON.type === "code") {
+                  codeEncountered = true;
+                  fullResponse += "```" + "\n";
+                  setStreamingMessage((prev) => prev + "```" + "\n");
+                }
+
+                fullResponse += validNDJSON.content;
+                setStreamingMessage((prev) => prev + validNDJSON.content);
               }
 
               buffer = "";
@@ -171,6 +199,7 @@ const Home = () => {
               if (videoUrl.endsWith('"}')) {
                 const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
                 setVideoUrls((prev) => [...prev, video]);
+                setIsPreviewOpen(true);
                 videoUrl = "";
               }
 
@@ -182,11 +211,28 @@ const Home = () => {
             if (buffer.endsWith('"}')) {
               const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
 
-              if (validNDJSON.type === "message") {
-                fullResponse += validNDJSON.content + "\n";
-                setStreamingMessage(
-                  (prev) => prev + validNDJSON.content + "\n"
-                );
+              if (
+                (validNDJSON.type === "classNames" ||
+                  validNDJSON.type === "message") &&
+                codeEncountered
+              ) {
+                fullResponse += "```" + "\n";
+                setStreamingMessage((prev) => prev + "```" + "\n");
+                codeEncountered = false;
+              }
+
+              if (
+                validNDJSON.type === "message" ||
+                validNDJSON.type === "code"
+              ) {
+                if (!codeEncountered && validNDJSON.type === "code") {
+                  codeEncountered = true;
+                  fullResponse += "```" + "\n";
+                  setStreamingMessage((prev) => prev + "```" + "\n");
+                }
+
+                fullResponse += validNDJSON.content;
+                setStreamingMessage((prev) => prev + validNDJSON.content);
               }
 
               buffer = "";
@@ -202,13 +248,18 @@ const Home = () => {
     }
   };
 
+  const previewCloseHandler = () => {
+    setVideoUrls([]);
+    setIsPreviewOpen(false);
+  };
+
   return (
-    <div className="bg-gray-100">
-      {videoUrls.length > 0 && (
+    <div className="bg-secondary">
+      {/* {videoUrls.length > 0 && (
         <div className="mt-4 space-y-4">
           {videoUrls.map((video) => (
             <video
-              key={video.fileId}
+              key={video.fileId + Date.now}
               controls
               className="w-full max-w-md mx-auto"
               preload="metadata"
@@ -220,7 +271,13 @@ const Home = () => {
             </video>
           ))}
         </div>
+      )} */}
+
+      {isPreviewOpen && (
+        <Preview videos={videoUrls} onClose={previewCloseHandler} />
       )}
+
+      {loadingPreview && <CustomLoader />}
 
       <Container>
         <div className="flex flex-col h-full">

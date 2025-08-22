@@ -86,7 +86,6 @@ export const chat = async (req: Request, res: Response) => {
 
       console.log(text);
     } else if (model === "DEEPSEEK") {
-      console.log("DEEEPSEEEEK");
       const openai = new OpenAI({
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: process.env.DEEPSEEK_OPEN_ROUTER_API_KEY,
@@ -112,6 +111,9 @@ export const chat = async (req: Request, res: Response) => {
         text += event.choices[0].delta.content;
       }
     }
+
+    res.write("event: loading\ndata: [LOADING]\n\n");
+
     const validJSONArray = text.split("\n");
     let pythonCode = "";
     let classNames: string[] = [];
@@ -206,17 +208,20 @@ export const chat = async (req: Request, res: Response) => {
   } catch (err) {
     console.log("Catch chat :", err);
 
-    if (err instanceof Error) {
-      res.status(500).json({
-        success: false,
-        message: err.message,
-      });
-      return;
-    }
+    res.write("event: error\ndata: [DONE]\n\n");
+    res.end();
 
-    res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    // if (err instanceof Error) {
+    //   res.status(500).json({
+    //     success: false,
+    //     message: err.message,
+    //   });
+    //   return;
+    // }
+
+    // res.status(500).json({
+    //   success: false,
+    //   message: "Internal Server Error",
+    // });
   }
 };
