@@ -114,7 +114,47 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+::-webkit-scrollbar {
+  width: 2px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.custom-scrollbar-markdown::-webkit-scrollbar {
+  height: 3px;
+}
+
+.custom-scrollbar-markdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar-markdown::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
 }

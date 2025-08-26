@@ -16,7 +16,7 @@ import {
   PromptInputToolbar,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Response } from "@/components/ai-elements/response";
 import { Loader } from "@/components/ai-elements/loader";
 import Container from "@/components/custom/Container";
@@ -24,24 +24,20 @@ import { type ChatStatus } from "ai";
 import axios from "axios";
 import CustomLoader from "@/components/custom/CustomLoader";
 import Preview from "@/components/custom/Preview";
+import CustomSidebar from "@/components/custom/CustomSidebar";
+import { v4 as uuidV4 } from "uuid";
+import { useSearchParams } from "react-router";
+import { getChatService } from "@/services/chatServices";
+import parseContent from "@/utils/parseContent";
 
-const models = [
-  {
-    name: "Claude Sonnet 4",
-    value: "CLAUDE",
-  },
-  {
-    name: "Deepseek R1",
-    value: "DEEPSEEK",
-  },
-];
+export type TRole = "user" | "assistant";
 
 type TMessage = {
   text: string;
-  role: "user" | "assistant";
+  role: TRole;
 };
 
-type TNDJSONStream =
+export type TNDJSONStream =
   | {
       type: "message";
       content: string;
@@ -62,9 +58,13 @@ export type TVideoBase64 = {
   message: string;
 };
 
+type TLooseAutoCompleteModel<T> = T | (string & {});
+type TModels = "CLAUDE" | "DEEPSEEK";
+
 const Home = () => {
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<string>(models[0].value);
+  const [model, setModel] =
+    useState<TLooseAutoCompleteModel<TModels>>("CLAUDE");
   const [messages, setMessages] = useState<TMessage[]>([]);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [videoUrls, setVideoUrls] = useState<TVideoBase64[]>([]);
@@ -75,9 +75,54 @@ const Home = () => {
   });
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const id = searchParams.get("id");
+
+    if (!id) {
+      setSearchParams({ id: uuidV4() });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const id = searchParams.get("id");
+
+    if (!id) return;
+
+    const getChat = async (id: string) => {
+      const chat = await getChatService(id);
+
+      if (typeof chat === "string") return;
+
+      setMessages(
+        chat.data.map((c) => ({
+          role: c.role,
+          text: c.role === "user" ? c.content : parseContent(c.content),
+        }))
+      );
+    };
+
+    getChat(id);
+  }, [searchParams]);
+
+  const models = [
+    {
+      name: "Claude Sonnet 4",
+      value: "CLAUDE",
+    },
+    {
+      name: "Deepseek R1",
+      value: "DEEPSEEK",
+    },
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const conversationId = searchParams.get("id");
+
+    if (!conversationId) return;
 
     setStatus("submitted");
     setInput("");
@@ -88,7 +133,7 @@ const Home = () => {
     try {
       const response = await axios.post<ReadableStream>(
         "http://localhost:8080/api/chat",
-        { model, messages: messagesToSend },
+        { model, conversationId, messages: messagesToSend },
         { responseType: "stream", adapter: "fetch" }
       );
 
@@ -253,105 +298,109 @@ const Home = () => {
     setIsPreviewOpen(false);
   };
 
+  const newChatHandler = () => {
+    if (messages.length === 0) {
+      return;
+    }
+
+    setMessages([]);
+    setModel("CLAUDE");
+    setSearchParams({ id: uuidV4() });
+  };
+
+  const prevChatHandler = async (id: string) => {
+    const chat = await getChatService(id);
+
+    if (typeof chat === "string") return;
+
+    setSearchParams({ id });
+    setMessages(
+      chat.data.map((c) => ({ role: c.role, text: parseContent(c.content) }))
+    );
+  };
+
   return (
     <div className="bg-secondary">
-      {/* {videoUrls.length > 0 && (
-        <div className="mt-4 space-y-4">
-          {videoUrls.map((video) => (
-            <video
-              key={video.fileId + Date.now}
-              controls
-              className="w-full max-w-md mx-auto"
-              preload="metadata"
-            >
-              <source src={video.videoUrl} type="video/mp4" />
-              <source src={video.videoUrl} type="video/webm" />
-              <source src={video.videoUrl} type="video/ogg" />
-              Your browser does not support the video tag.
-            </video>
-          ))}
-        </div>
-      )} */}
-
       {isPreviewOpen && (
         <Preview videos={videoUrls} onClose={previewCloseHandler} />
       )}
 
       {loadingPreview && <CustomLoader />}
 
-      <Container>
-        <div className="flex flex-col h-full">
-          <Conversation className="h-full relative">
-            <ConversationContent>
-              {messages.length <= 0 && (
-                <div className="absolute top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-max flex flex-col gap-2 items-center">
-                  <h1 className="font-bold text-5xl">
-                    {welcomeMessage.heading}
-                  </h1>
-                  <p className="font-semibold text-lg">
-                    {welcomeMessage.content}
-                  </p>
-                </div>
-              )}
-              {messages.map((message, index) => (
-                <div key={index}>
-                  <Message from={message.role} key={index}>
+      <CustomSidebar onNewChat={newChatHandler} onPrevChat={prevChatHandler}>
+        <Container>
+          <div className="flex flex-col h-full">
+            {messages.length <= 0 && (
+              <div className="flex-10 flex flex-col gap-4 items-center justify-center text-center">
+                <h1 className="font-bold text-5xl">{welcomeMessage.heading}</h1>
+                <p className="font-semibold text-lg">
+                  {welcomeMessage.content}
+                </p>
+              </div>
+            )}
+
+            <Conversation className="relative">
+              <ConversationContent>
+                {messages.map((message, index) => (
+                  <div key={index}>
+                    <Message from={message.role} key={index}>
+                      <MessageContent className="group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground dark:group-[.is-user]:bg-primary-foreground dark:group-[.is-user]:text-primary">
+                        <Response>{message.text}</Response>
+                      </MessageContent>
+                    </Message>
+                  </div>
+                ))}
+                {streamingMessage && (
+                  <Message from="assistant">
                     <MessageContent>
-                      <Response>{message.text}</Response>
+                      <Response>{streamingMessage}</Response>
                     </MessageContent>
                   </Message>
-                </div>
-              ))}
-              {streamingMessage && (
-                <Message from="assistant">
-                  <MessageContent>
-                    <Response>{streamingMessage}</Response>
-                  </MessageContent>
-                </Message>
-              )}
-              {status == "submitted" && <Loader />}
-            </ConversationContent>
-            <ConversationScrollButton />
-          </Conversation>
+                )}
+                {status == "submitted" && <Loader />}
+              </ConversationContent>
+              <ConversationScrollButton variant={"secondary"} />
+            </Conversation>
 
-          <PromptInput onSubmit={handleSubmit} className="mt-4">
-            <PromptInputTextarea
-              onChange={(e) => setInput(e.target.value)}
-              value={input}
-            />
-            <PromptInputToolbar>
-              <PromptInputTools>
-                <PromptInputModelSelect
-                  onValueChange={(value) => {
-                    setModel(value);
-                  }}
-                  value={model}
-                >
-                  <PromptInputModelSelectTrigger>
-                    <PromptInputModelSelectValue />
-                  </PromptInputModelSelectTrigger>
-                  <PromptInputModelSelectContent>
-                    {models.map((model) => (
-                      <PromptInputModelSelectItem
-                        key={model.value}
-                        value={model.value}
-                      >
-                        {model.name}
-                      </PromptInputModelSelectItem>
-                    ))}
-                  </PromptInputModelSelectContent>
-                </PromptInputModelSelect>
-              </PromptInputTools>
-              <PromptInputSubmit
-                disabled={
-                  !input || status === "submitted" || status === "streaming"
-                }
-                status={status}
+            <PromptInput onSubmit={handleSubmit} className="mt-4">
+              <PromptInputTextarea
+                onChange={(e) => setInput(e.target.value)}
+                value={input}
               />
-            </PromptInputToolbar>
-          </PromptInput>
-        </div>
-      </Container>
+              <PromptInputToolbar>
+                <PromptInputTools>
+                  <PromptInputModelSelect
+                    onValueChange={(value) => {
+                      setModel(value);
+                    }}
+                    value={model}
+                  >
+                    <PromptInputModelSelectTrigger>
+                      <PromptInputModelSelectValue />
+                    </PromptInputModelSelectTrigger>
+                    <PromptInputModelSelectContent>
+                      {models.map((model) => (
+                        <PromptInputModelSelectItem
+                          key={model.value}
+                          value={model.value}
+                        >
+                          {model.name}
+                        </PromptInputModelSelectItem>
+                      ))}
+                    </PromptInputModelSelectContent>
+                  </PromptInputModelSelect>
+                </PromptInputTools>
+                <PromptInputSubmit
+                  disabled={
+                    !input || status === "submitted" || status === "streaming"
+                  }
+                  status={status}
+                />
+              </PromptInputToolbar>
+            </PromptInput>
+          </div>
+        </Container>
+      </CustomSidebar>
     </div>
   );
 };

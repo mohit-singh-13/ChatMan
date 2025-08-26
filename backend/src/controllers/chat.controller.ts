@@ -1,12 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Request, Response } from "express";
-import z from "zod";
+import z, { success } from "zod";
 import { SYSTEM_PROMPT } from "../constants/prompt";
 import fs, { existsSync } from "fs";
-import { XMLParser } from "fast-xml-parser";
 import generateVideo from "../helpers/generateVideo";
 import path from "path";
 import OpenAI from "openai";
+import { PrismaClient } from "@prisma/client";
 
 type TNDJSONStream =
   | {
@@ -24,21 +24,25 @@ type TNDJSONStream =
     };
 
 export const chat = async (req: Request, res: Response) => {
-  const chatSchema = z.object({
+  const ChatSchema = z.object({
     model: z.enum(["CLAUDE", "DEEPSEEK"], {
       error: "We don't support this model yet",
     }),
+    conversationId: z.uuid({ error: "Invalid Conversation ID" }),
     messages: z
       .array(
-        z.object({
-          text: z.string(),
-          role: z.enum(["user", "assistant"]),
-        })
+        z.object(
+          {
+            text: z.string(),
+            role: z.enum(["user", "assistant"], { error: "Invalid role" }),
+          },
+          { error: "Invalid message" }
+        )
       )
       .min(1),
   });
 
-  const parsedInput = chatSchema.safeParse(req.body);
+  const parsedInput = ChatSchema.safeParse(req.body);
 
   if (!parsedInput.success) {
     console.log("Invalid inputs chat :", parsedInput.error);
@@ -50,7 +54,54 @@ export const chat = async (req: Request, res: Response) => {
     return;
   }
 
-  const { model, messages } = parsedInput.data;
+  const { model, conversationId, messages } = parsedInput.data;
+
+  const prisma = new PrismaClient();
+
+  try {
+    const userMessageToSave = messages[messages.length - 1].text;
+
+    const conversation = await prisma.allConversations.findUnique({
+      where: {
+        conversation_id: conversationId,
+      },
+    });
+
+    if (!conversation) {
+      await prisma.allConversations.create({
+        data: {
+          conversation_id: conversationId,
+          title: userMessageToSave.slice(0, 20),
+        },
+      });
+    }
+
+    await prisma.conversation.create({
+      data: {
+        conversation_id: conversationId,
+        role: "user",
+        content: userMessageToSave,
+      },
+    });
+  } catch (err) {
+    console.log("Error while saving user chat in DB : ", err);
+
+    await prisma.$disconnect();
+
+    if (err instanceof Error) {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+    return;
+  }
 
   try {
     res.setHeader("Content-Type", "text/event-stream"); // SSE
@@ -113,6 +164,14 @@ export const chat = async (req: Request, res: Response) => {
     }
 
     res.write("event: loading\ndata: [LOADING]\n\n");
+
+    await prisma.conversation.create({
+      data: {
+        conversation_id: conversationId,
+        role: "assistant",
+        content: text,
+      },
+    });
 
     const validJSONArray = text.split("\n");
     let pythonCode = "";
@@ -210,18 +269,88 @@ export const chat = async (req: Request, res: Response) => {
 
     res.write("event: error\ndata: [DONE]\n\n");
     res.end();
+  }
+};
 
-    // if (err instanceof Error) {
-    //   res.status(500).json({
-    //     success: false,
-    //     message: err.message,
-    //   });
-    //   return;
-    // }
+export const getAllChats = async (req: Request, res: Response) => {
+  const prisma = new PrismaClient();
 
-    // res.status(500).json({
-    //   success: false,
-    //   message: "Internal Server Error",
-    // });
+  try {
+    const chats = await prisma.allConversations.findMany();
+
+    res.status(200).json({
+      success: true,
+      message: "Chats retrieved successfully",
+      data: chats,
+    });
+  } catch (err) {
+    console.log("Catch getAllChats :", err);
+
+    if (err instanceof Error) {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
+export const getChat = async (req: Request, res: Response) => {
+  const GetChatSchema = z.object({
+    conversationId: z.uuid({ error: "Invalid Conversation ID" }),
+  });
+
+  const parsedParams = GetChatSchema.safeParse(req.params);
+
+  if (!parsedParams.success) {
+    console.log("Invalid inputs getChats :", parsedParams.error);
+
+    res.status(400).json({
+      success: false,
+      message: parsedParams.error.issues[0].message,
+    });
+    return;
+  }
+
+  const { conversationId } = parsedParams.data;
+  const prisma = new PrismaClient();
+
+  try {
+    const chat = await prisma.conversation.findMany({
+      where: {
+        conversation_id: conversationId,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Chat retrieved successfully",
+      data: chat,
+    });
+  } catch (err) {
+    console.log("Catch getChat :", err);
+
+    if (err instanceof Error) {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  } finally {
+    await prisma.$disconnect();
   }
 };
