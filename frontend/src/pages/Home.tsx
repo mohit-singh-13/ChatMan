@@ -93,7 +93,7 @@ const Home = () => {
     const getChat = async (id: string) => {
       const chat = await getChatService(id);
 
-      if (typeof chat === "string") return;
+      if (!chat.success) return;
 
       setMessages(
         chat.data.map((c) => ({
@@ -311,7 +311,7 @@ const Home = () => {
   const prevChatHandler = async (id: string) => {
     const chat = await getChatService(id);
 
-    if (typeof chat === "string") return;
+    if (!chat.success) return;
 
     setSearchParams({ id });
     setMessages(

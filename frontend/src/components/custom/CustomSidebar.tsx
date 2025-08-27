@@ -6,7 +6,7 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useOptimistic, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -28,7 +28,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import type React from "react";
-import { getAllChatsService } from "@/services/chatServices";
+import {
+  deleteChatService,
+  getAllChatsService,
+  renameChatService,
+} from "@/services/chatServices";
 
 type TCustomSidebarProps = {
   onNewChat: () => void;
@@ -36,30 +40,34 @@ type TCustomSidebarProps = {
   children: React.ReactNode;
 };
 
+type TChatName = {
+  id: string;
+  title: string;
+};
+
 const CustomSidebar = ({
   onNewChat,
   onPrevChat,
   children,
 }: TCustomSidebarProps) => {
-  const [chatNames, setChatNames] = useState<{ id: string; title: string }[]>(
-    Array.from({ length: 20 }, (_, index) => ({
-      id: `${index}`,
-      title: `PrevChat ${index + 1}`,
-    }))
-  );
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [chatNames, setChatNames] = useState<TChatName[]>([]);
+  const [editingId, setEditingId] = useState<string>("");
   const [tempName, setTempName] = useState("");
+  const [optimisticChatNames, updateOptimisticChatNames] = useOptimistic<
+    TChatName[],
+    TChatName[]
+  >(chatNames, (_, updatedChatNames) => updatedChatNames);
 
   useEffect(() => {
     const getAllChats = async () => {
       const chats = await getAllChatsService();
 
-      if (typeof chats === "string") return;
+      if (!chats.success) return;
 
       setChatNames(
         chats.data.map((chat) => ({
           id: chat.conversation_id,
-          title: chat.title + "...",
+          title: chat.title,
         }))
       );
     };
@@ -67,34 +75,69 @@ const CustomSidebar = ({
     getAllChats();
   }, []);
 
-  const handleRename = (index: number) => {
-    setEditingIndex(index);
-    setTempName(chatNames[index].title);
+  const handleRename = (id: string) => {
+    setEditingId(id);
+
+    const temp = chatNames.find((chat) => chat.id === id);
+    if (!temp) return;
+    setTempName(temp.title);
   };
 
-  const handleSave = (index: number) => {
+  const handleSave = (id: string) => {
     if (tempName.trim()) {
-      const newChatNames = [...chatNames];
-      newChatNames[index].title = tempName.trim();
-      setChatNames(newChatNames);
+      startTransition(() => {
+        const updatedChatNames = optimisticChatNames.map((chat) =>
+          chat.id === id ? { ...chat, title: tempName.trim() } : chat
+        );
+
+        updateOptimisticChatNames(updatedChatNames);
+      });
+
+      startTransition(async () => {
+        const result = await renameChatService(id, tempName);
+
+        if (result.success) {
+          setChatNames((prev) =>
+            prev.map((p) =>
+              p.id === result.data.conversation_id
+                ? { ...p, title: result.data.title }
+                : p
+            )
+          );
+        }
+      });
     }
-    setEditingIndex(null);
+
+    setEditingId("");
     setTempName("");
   };
 
   const handleCancel = () => {
-    setEditingIndex(null);
+    setEditingId("");
     setTempName("");
   };
 
-  const handleDelete = (index: number) => {
-    const newChatNames = chatNames.filter((_, i) => i !== index);
-    setChatNames(newChatNames);
+  const handleDelete = (id: string) => {
+    startTransition(() => {
+      const updatedChatNames = optimisticChatNames.filter(
+        (chat) => chat.id !== id
+      );
+
+      updateOptimisticChatNames(updatedChatNames);
+    });
+
+    startTransition(async () => {
+      const result = await deleteChatService(id);
+
+      if (result.success) {
+        setChatNames((prev) => prev.filter((p) => p.id !== id));
+      }
+    });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
     if (e.key === "Enter") {
-      handleSave(index);
+      handleSave(id);
     } else if (e.key === "Escape") {
       handleCancel();
     }
@@ -125,20 +168,20 @@ const CustomSidebar = ({
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {chatNames.map((chatName, index) => (
+                {optimisticChatNames.map((chatName) => (
                   <SidebarMenuItem key={chatName.id}>
-                    {editingIndex === index ? (
+                    {editingId === chatName.id ? (
                       <div className="flex items-center gap-2 px-2 py-1">
                         <input
                           type="text"
                           value={tempName}
                           onChange={(e) => setTempName(e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(e, index)}
+                          onKeyDown={(e) => handleKeyDown(e, chatName.id)}
                           className="flex-1 bg-transparent border-b border-gray-400 outline-none text-sm py-1"
                           autoFocus
                         />
                         <button
-                          onClick={() => handleSave(index)}
+                          onClick={() => handleSave(chatName.id)}
                           className="p-1 hover:bg-gray-200 rounded"
                         >
                           <Check className="w-3 h-3 text-green-600" />
@@ -166,14 +209,14 @@ const CustomSidebar = ({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent side="right" align="start">
                             <DropdownMenuItem
-                              onClick={() => handleRename(index)}
+                              onClick={() => handleRename(chatName.id)}
                             >
                               <Pencil />
                               <span>Rename</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               variant="destructive"
-                              onClick={() => handleDelete(index)}
+                              onClick={() => handleDelete(chatName.id)}
                             >
                               <Trash2 className="text-white" />
                               <span>Delete</span>

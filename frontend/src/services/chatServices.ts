@@ -1,27 +1,21 @@
 import type { TRole } from "@/pages/Home";
 import axios, { isAxiosError } from "axios";
 
-type TGetAllChatsResponse = {
-  success: boolean;
-  message: string;
-  data: {
-    conversation_id: string;
-    title: string;
-  }[];
-};
+type TGetAllChatsResponse =
+  | {
+      success: true;
+      message: string;
+      data: {
+        conversation_id: string;
+        title: string;
+      }[];
+    }
+  | {
+      success: false;
+      message: string;
+    };
 
-type TGetChatResponse = {
-  success: boolean;
-  message: string;
-  data: {
-    role: TRole;
-    conversation_id: string;
-    content: string;
-    id: number;
-  }[];
-};
-
-export const getAllChatsService = async () => {
+export const getAllChatsService = async (): Promise<TGetAllChatsResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
   try {
@@ -34,14 +28,38 @@ export const getAllChatsService = async () => {
     console.log("Catch getAllChatsService :", err);
 
     if (isAxiosError(err)) {
-      return err.message;
+      return {
+        success: false,
+        message: err.message,
+      };
     }
 
-    return "Service unavailable";
+    return {
+      success: false,
+      message: "Service unavailable",
+    };
   }
 };
 
-export const getChatService = async (conversationId: string) => {
+type TGetChatResponse =
+  | {
+      success: true;
+      message: string;
+      data: {
+        role: TRole;
+        conversation_id: string;
+        content: string;
+        id: number;
+      }[];
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
+export const getChatService = async (
+  conversationId: string
+): Promise<TGetChatResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
   try {
@@ -54,9 +72,95 @@ export const getChatService = async (conversationId: string) => {
     console.log("Catch getChat :", err);
 
     if (isAxiosError(err)) {
-      return err.message;
+      return {
+        success: false,
+        message: err.message,
+      };
     }
 
-    return "Service unavailable";
+    return {
+      success: false,
+      message: "Service unavailable",
+    };
+  }
+};
+
+type TRenameChatResponse =
+  | {
+      success: true;
+      message: string;
+      data: {
+        title: string;
+        conversation_id: string;
+      };
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
+export const renameChatService = async (
+  conversationId: string,
+  title: string
+): Promise<TRenameChatResponse> => {
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  try {
+    const result = await axios.put<TRenameChatResponse>(
+      `${API_URL}/api/chat/renameChat`,
+      {
+        conversationId,
+        title,
+      }
+    );
+
+    return result.data;
+  } catch (err) {
+    console.log("Catch getChat :", err);
+
+    if (isAxiosError(err)) {
+      return {
+        success: false,
+        message: err.message,
+      };
+    }
+
+    return {
+      success: false,
+      message: "Service unavailable",
+    };
+  }
+};
+
+type TDeleteChatResponse = {
+  success: boolean;
+  message: string;
+};
+
+export const deleteChatService = async (
+  conversationId: string
+): Promise<TDeleteChatResponse> => {
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  try {
+    const result = await axios.delete<TDeleteChatResponse>(
+      `${API_URL}/api/chat/deleteChat/${conversationId}`
+    );
+
+    return result.data;
+  } catch (err) {
+    console.log("Catch deleteChatService :", err);
+
+    if (isAxiosError(err)) {
+      return {
+        success: false,
+        message: err.message,
+      };
+    }
+
+    return {
+      success: false,
+      message: "Service unavailable",
+    };
   }
 };

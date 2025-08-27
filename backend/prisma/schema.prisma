@@ -19,17 +19,21 @@ enum Role {
 }
 
 model Conversation {
-  id      Int    @id @default(autoincrement())
-  role    Role
-  content String
+  id         Int      @id @default(autoincrement())
+  role       Role
+  content    String
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
-  AllConversations AllConversations @relation(fields: [conversation_id], references: [conversation_id])
   conversation_id  String
+  AllConversations AllConversations @relation(fields: [conversation_id], references: [conversation_id])
 }
 
 model AllConversations {
-  conversation_id String @id
+  conversation_id String   @id
   title           String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
 
   Conversation Conversation[]
 }

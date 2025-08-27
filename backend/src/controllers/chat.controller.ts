@@ -276,7 +276,11 @@ export const getAllChats = async (req: Request, res: Response) => {
   const prisma = new PrismaClient();
 
   try {
-    const chats = await prisma.allConversations.findMany();
+    const chats = await prisma.allConversations.findMany({
+      orderBy: {
+        updated_at: "desc",
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -337,6 +341,107 @@ export const getChat = async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.log("Catch getChat :", err);
+
+    if (err instanceof Error) {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
+export const renameChat = async (req: Request, res: Response) => {
+  const RenameChatSchema = z.object({
+    conversationId: z.uuid({ error: "Invalid Conversation ID" }),
+    title: z.string().min(1, { message: "Title cannot be empty" }),
+  });
+
+  const parsedBody = RenameChatSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    res.status(400).json({
+      success: false,
+      message: parsedBody.error.issues[0].message,
+    });
+    return;
+  }
+
+  const { conversationId, title } = parsedBody.data;
+  const prisma = new PrismaClient();
+
+  try {
+    const updated = await prisma.allConversations.update({
+      where: { conversation_id: conversationId },
+      data: { title },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Chat renamed successfully",
+      data: updated,
+    });
+  } catch (err) {
+    console.log("Error renaming chat:", err);
+
+    if (err instanceof Error) {
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
+export const deleteChat = async (req: Request, res: Response) => {
+  const DeleteChatSchema = z.object({
+    conversationId: z.uuid({ error: "Invalid Conversation ID" }),
+  });
+
+  const parsedParams = DeleteChatSchema.safeParse(req.params);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      success: false,
+      message: parsedParams.error.issues[0].message,
+    });
+    return;
+  }
+
+  const { conversationId } = parsedParams.data;
+  const prisma = new PrismaClient();
+
+  try {
+    await prisma.conversation.deleteMany({
+      where: { conversation_id: conversationId },
+    });
+
+    await prisma.allConversations.delete({
+      where: { conversation_id: conversationId },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Chat deleted successfully",
+    });
+  } catch (err) {
+    console.log("Error deleting chat:", err);
 
     if (err instanceof Error) {
       res.status(500).json({
