@@ -11,13 +11,13 @@ const Preview = ({
 }) => {
   return (
     <div className="absolute inset-0 flex justify-center items-center">
-      <div className="absolute inset-0 z-[10] bg-black opacity-50"></div>
+      <div className="absolute inset-0 z-[20] bg-black opacity-70"></div>
 
       <Container className="flex justify-center items-center">
-        <div className="h-[80%] w-full max-w-4xl rounded-xl bg-white relative z-[11] shadow-2xl overflow-hidden">
+        <div className="h-[80%] w-full max-w-4xl rounded-xl bg-accent relative z-[30] shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-gray-800">
+          <div className="px-6 py-4 border-b border-accent-foreground flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-accent-foreground">
               Video Preview
             </h2>
             <button
@@ -34,7 +34,7 @@ const Preview = ({
               {videos.map((video, index) => (
                 <div
                   key={video.fileId + Date.now() + index}
-                  className="bg-gray-50 rounded-lg p-4 shadow-sm"
+                  className="bg-primary-foreground rounded-lg p-4 shadow-sm"
                 >
                   <video
                     controls
@@ -48,7 +48,7 @@ const Preview = ({
                   </video>
 
                   {/* Optional: Video info */}
-                  <div className="mt-3 text-sm text-gray-600">
+                  <div className="mt-3 text-sm text-accent-foreground">
                     Video {index + 1}
                   </div>
                 </div>

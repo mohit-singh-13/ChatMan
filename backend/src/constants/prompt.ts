@@ -60,7 +60,7 @@ Example 1 - Streaming Message and Code:
 {"type":"code","language":"python","content":"    \\n"}
 {"type":"code","language":"python","content":"    arrow2 = Arrow(backend_box.get_right(), database_box.get_left(), color=YELLOW)\\n"}
 {"type":"code","language":"python","content":"    self.play(Create(arrow2))\\n"}
-{"type":"code","language":"python","content":"    self.wait(2)"}
+{"type":"code","language":"python","content":"    self.wait(2)\\n"}
 {"type":"classNames","content":'["SystemArchitecture"]'}
 
 Example 2 - Streaming Message Only:
@@ -75,4 +75,5 @@ CONTENT SPLITTING GUIDELINES:
 - Ensure each chunk is self-contained enough to be processed independently
 - Maintain proper escaping for JSON strings (newlines as \\n, quotes as \\", etc.)
 - Keep consistent indentation and formatting across code chunks
+- Strictly provide \\n\\n between "type": "message" and "type": "code"
 `;

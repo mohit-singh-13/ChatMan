@@ -163,8 +163,6 @@ export const chat = async (req: Request, res: Response) => {
       }
     }
 
-    res.write("event: loading\ndata: [LOADING]\n\n");
-
     await prisma.conversation.create({
       data: {
         conversation_id: conversationId,
@@ -206,6 +204,8 @@ export const chat = async (req: Request, res: Response) => {
       }
 
       fs.writeFileSync(scriptPath, pythonCode);
+
+      res.write("event: loading\ndata: [LOADING]\n\n");
 
       // call generateVideo with script path
       const result = await generateVideo({
@@ -331,6 +331,9 @@ export const getChat = async (req: Request, res: Response) => {
     const chat = await prisma.conversation.findMany({
       where: {
         conversation_id: conversationId,
+      },
+      orderBy: {
+        created_at: "asc",
       },
     });
 

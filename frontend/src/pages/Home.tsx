@@ -19,12 +19,12 @@ import {
 import { useEffect, useState } from "react";
 import { Response } from "@/components/ai-elements/response";
 import { Loader } from "@/components/ai-elements/loader";
-import Container from "@/components/custom/Container";
+import Container from "@/components/ui/custom/Container";
 import { type ChatStatus } from "ai";
 import axios from "axios";
-import CustomLoader from "@/components/custom/CustomLoader";
-import Preview from "@/components/custom/Preview";
-import CustomSidebar from "@/components/custom/CustomSidebar";
+import CustomLoader from "@/components/ui/custom/CustomLoader";
+import Preview from "@/components/ui/custom/Preview";
+import CustomSidebar from "@/components/ui/custom/CustomSidebar";
 import { v4 as uuidV4 } from "uuid";
 import { useSearchParams } from "react-router";
 import { getChatService } from "@/services/chatServices";
@@ -309,13 +309,18 @@ const Home = () => {
   };
 
   const prevChatHandler = async (id: string) => {
+    if (searchParams.get("id") === id) return;
+
     const chat = await getChatService(id);
 
     if (!chat.success) return;
 
     setSearchParams({ id });
     setMessages(
-      chat.data.map((c) => ({ role: c.role, text: parseContent(c.content) }))
+      chat.data.map((c) => ({
+        role: c.role,
+        text: c.role === "user" ? c.content : parseContent(c.content),
+      }))
     );
   };
 

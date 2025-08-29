@@ -10,6 +10,7 @@ import { startTransition, useEffect, useOptimistic, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -20,19 +21,21 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
-} from "../ui/sidebar";
+} from "../sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+} from "../dropdown-menu";
 import type React from "react";
 import {
   deleteChatService,
   getAllChatsService,
   renameChatService,
 } from "@/services/chatServices";
+import ThemeToggle from "./ThemeToggle";
+import { useSearchParams } from "react-router";
 
 type TCustomSidebarProps = {
   onNewChat: () => void;
@@ -57,6 +60,10 @@ const CustomSidebar = ({
     TChatName[],
     TChatName[]
   >(chatNames, (_, updatedChatNames) => updatedChatNames);
+  const [searchParams] = useSearchParams();
+  const [selectedChat, setSelectedChat] = useState<string>(
+    searchParams.get("id") || ""
+  );
 
   useEffect(() => {
     const getAllChats = async () => {
@@ -154,7 +161,10 @@ const CustomSidebar = ({
             <SidebarMenuItem>
               <SidebarMenuButton
                 className="text-[1rem] py-6"
-                onClick={onNewChat}
+                onClick={() => {
+                  onNewChat();
+                  setSelectedChat("");
+                }}
               >
                 <NotebookPen /> New Chat
               </SidebarMenuButton>
@@ -197,7 +207,11 @@ const CustomSidebar = ({
                       <>
                         <SidebarMenuButton
                           className="py-5"
-                          onClick={onPrevChat.bind(this, chatName.id)}
+                          onClick={() => {
+                            onPrevChat(chatName.id);
+                            setSelectedChat(chatName.id);
+                          }}
+                          isActive={selectedChat === chatName.id}
                         >
                           {chatName.title}
                         </SidebarMenuButton>
@@ -231,6 +245,13 @@ const CustomSidebar = ({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem className="text-center">
+              <ThemeToggle />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
       <SidebarTrigger />
 
