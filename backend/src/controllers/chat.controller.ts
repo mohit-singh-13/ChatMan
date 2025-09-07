@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Request, Response } from "express";
-import z, { success } from "zod";
+import z from "zod";
 import { SYSTEM_PROMPT } from "../constants/prompt";
-import fs, { existsSync } from "fs";
+import fs from "fs";
 import generateVideo from "../helpers/generateVideo";
 import path from "path";
 import OpenAI from "openai";
@@ -257,7 +257,7 @@ export const chat = async (req: Request, res: Response) => {
       );
 
       // delete script from temp
-      if (existsSync(scriptPath)) {
+      if (fs.existsSync(scriptPath)) {
         fs.unlinkSync(scriptPath);
       }
     }

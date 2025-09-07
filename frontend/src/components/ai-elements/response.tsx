@@ -10,6 +10,7 @@ import remarkMath from "remark-math";
 import { cn } from "@/lib/utils";
 import "katex/dist/katex.min.css";
 import hardenReactMarkdown from "harden-react-markdown";
+import GenerateButton from "../ui/custom/GenerateButton";
 
 /**
  * Parses markdown text and removes incomplete tokens to prevent partial rendering
@@ -274,6 +275,7 @@ const components: Options["components"] = {
         code={(children.props as { children: string }).children}
         language={language}
       >
+        <GenerateButton>{children}</GenerateButton>
         <CodeBlockCopyButton
           onCopy={() => console.log("Copied code to clipboard")}
           onError={() => console.error("Failed to copy code to clipboard")}

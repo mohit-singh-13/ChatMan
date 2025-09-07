@@ -77,3 +77,33 @@ CONTENT SPLITTING GUIDELINES:
 - Keep consistent indentation and formatting across code chunks
 - Strictly provide \\n\\n between "type": "message" and "type": "code"
 `;
+
+export const GET_CLASSNAME_PROMPT = `I'll provide you with some Python code and you just need to return me the names of the classes used in that code in JSON format. Strictly return only the names and nothing else. Following is an example of how you need to return the class names.
+
+Input Example 1 :-
+from manim import *
+
+class PythagoreanProof(Scene):
+  def construct(self):
+    ...
+
+OUTPUT :-
+{
+  "classNames": ["PythagoreanProof"]
+}
+
+Input Example 2 :-
+from manim import *
+
+class HelloWorld():
+    ...
+
+class Namaste():
+    ...
+
+OUTPUT :-
+{
+  "classNames": ["HelloWorld", "Namaste"]
+}
+
+`;

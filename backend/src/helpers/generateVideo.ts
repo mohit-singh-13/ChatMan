@@ -8,7 +8,6 @@ type TProps = {
 
 const generateVideo = async ({ fileId, classNames }: TProps) => {
   try {
-    console.log("ENTR");
     console.log(classNames);
     console.log(typeof classNames);
     const filePath = path.join(__dirname, `../temp/manim-code-${fileId}.py`);
