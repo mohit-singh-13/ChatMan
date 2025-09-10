@@ -29,6 +29,13 @@ import { v4 as uuidV4 } from "uuid";
 import { useSearchParams } from "react-router";
 import { getChatService } from "@/services/chatServices";
 import parseContent from "@/utils/parseContent";
+import { useAppDispatch, useAppSelector } from "@/hooks/reduxHooks";
+import {
+  setError,
+  setLoadingPreview,
+  setPreview,
+  setVideoUrls,
+} from "@/store/slices/videoSlice";
 
 export type TRole = "user" | "assistant";
 
@@ -55,7 +62,7 @@ export type TNDJSONStream =
 export type TVideoBase64 = {
   fileId: string;
   videoUrl: string;
-  message: string;
+  message?: string;
 };
 
 type TLooseAutoCompleteModel<T> = T | (string & {});
@@ -67,15 +74,16 @@ const Home = () => {
     useState<TLooseAutoCompleteModel<TModels>>("CLAUDE");
   const [messages, setMessages] = useState<TMessage[]>([]);
   const [streamingMessage, setStreamingMessage] = useState("");
-  const [videoUrls, setVideoUrls] = useState<TVideoBase64[]>([]);
   const [status, setStatus] = useState<ChatStatus>("ready");
   const [welcomeMessage] = useState({
     heading: "Welcome to ChatMan!",
     content: "You're one prompt away from your amazing video...",
   });
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [loadingPreview, setLoadingPreview] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isPreviewOpen, loadingPreview, videoUrls, error } = useAppSelector(
+    (state) => state.video
+  );
+  const dispatch = useAppDispatch();
 
   useEffect(() => {
     const id = searchParams.get("id");
@@ -91,16 +99,25 @@ const Home = () => {
     if (!id) return;
 
     const getChat = async (id: string) => {
-      const chat = await getChatService(id);
+      try {
+        const chat = await getChatService(id);
 
-      if (!chat.success) return;
+        if (!chat.success) {
+          dispatch(setError(chat.message || "Failed to load chat history"));
+          return;
+        }
 
-      setMessages(
-        chat.data.map((c) => ({
-          role: c.role,
-          text: c.role === "user" ? c.content : parseContent(c.content),
-        }))
-      );
+        setMessages(
+          chat.data.map((c) => ({
+            role: c.role,
+            text: c.role === "user" ? c.content : parseContent(c.content),
+          }))
+        );
+        dispatch(setError(null));
+      } catch (err) {
+        console.error("Error loading chat:", err);
+        dispatch(setError("Failed to load chat history. Please try again."));
+      }
     };
 
     getChat(id);
@@ -122,10 +139,14 @@ const Home = () => {
 
     const conversationId = searchParams.get("id");
 
-    if (!conversationId) return;
+    if (!conversationId) {
+      dispatch(setError("No conversation ID found. Please refresh the page."));
+      return;
+    }
 
     setStatus("submitted");
     setInput("");
+    dispatch(setError(null));
     setMessages((prev) => [...prev, { text: input, role: "user" }]);
 
     const messagesToSend = [...messages, { text: input, role: "user" }];
@@ -147,155 +168,213 @@ const Home = () => {
       let codeEncountered = false;
 
       while (true) {
-        const { value, done } = await reader.read();
+        try {
+          const { value, done } = await reader.read();
 
-        if (done) {
-          setStatus("ready");
-          break;
-        }
+          if (done) {
+            setStatus("ready");
+            break;
+          }
 
-        const lines = value.split("\n");
-        console.log("lines");
-        console.log(lines);
+          const lines = value.split("\n");
+          console.log("lines");
+          console.log(lines);
 
-        for (const line of lines) {
-          if (line.startsWith("event: loading")) {
-            setLoadingPreview(true);
-            continue;
-          } else if (
-            line.startsWith("event: data") ||
-            line.startsWith("event: end") ||
-            line.startsWith("event: video")
-          ) {
-            continue;
-          } else if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-
-            if (data === "[DONE]") {
-              setLoadingPreview(false);
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", text: fullResponse },
-              ]);
-              setStreamingMessage("");
-              continue;
-            }
-
-            if (
-              data.includes("videoUrl") ||
-              (data.includes("fileId") && data.includes("message"))
-            ) {
-              videoUrl += data;
-
-              console.log("VIDE URL");
-              console.log(videoUrl);
-
-              if (videoUrl.endsWith('"}')) {
-                const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
-                setVideoUrls((prev) => [...prev, video]);
-                setIsPreviewOpen(true);
-                videoUrl = "";
-              }
-
-              continue;
-            }
-
-            buffer += data;
-
-            if (buffer.endsWith('"}')) {
-              const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
-
-              if (
-                (validNDJSON.type === "classNames" ||
-                  validNDJSON.type === "message") &&
-                codeEncountered
+          for (const line of lines) {
+            try {
+              if (line.startsWith("event: loading")) {
+                dispatch(setLoadingPreview(true));
+                continue;
+              } else if (
+                line.startsWith("event: data") ||
+                line.startsWith("event: end") ||
+                line.startsWith("event: video")
               ) {
-                fullResponse += "```" + "\n";
-                setStreamingMessage((prev) => prev + "```" + "\n");
-                codeEncountered = false;
-              }
+                continue;
+              } else if (line.startsWith("data: ")) {
+                const data = line.slice(6);
 
-              if (
-                validNDJSON.type === "message" ||
-                validNDJSON.type === "code"
-              ) {
-                if (!codeEncountered && validNDJSON.type === "code") {
-                  codeEncountered = true;
-                  fullResponse += "```" + "\n";
-                  setStreamingMessage((prev) => prev + "```" + "\n");
+                if (data === "[DONE]") {
+                  dispatch(setLoadingPreview(false));
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "assistant", text: fullResponse },
+                  ]);
+                  setStreamingMessage("");
+                  continue;
                 }
 
-                fullResponse += validNDJSON.content;
-                setStreamingMessage((prev) => prev + validNDJSON.content);
-              }
+                if (
+                  data.includes("videoUrl") ||
+                  (data.includes("fileId") && data.includes("message"))
+                ) {
+                  videoUrl += data;
 
-              buffer = "";
-            }
-          } else {
-            if (
-              line.includes("videoUrl") ||
-              (line.includes("fileId") && line.includes("message"))
-            ) {
-              videoUrl += line;
+                  console.log("VIDE URL");
+                  console.log(videoUrl);
 
-              console.log("VIDE URL");
-              console.log(videoUrl);
+                  if (videoUrl.endsWith('"}')) {
+                    try {
+                      const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
+                      dispatch(setVideoUrls([...videoUrls, video]));
+                      dispatch(setLoadingPreview(true));
+                      videoUrl = "";
+                    } catch (parseErr) {
+                      console.error("Error parsing video data:", parseErr);
+                      dispatch(setError("Error processing video data"));
+                    }
+                  }
 
-              if (videoUrl.endsWith('"}')) {
-                const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
-                setVideoUrls((prev) => [...prev, video]);
-                setIsPreviewOpen(true);
-                videoUrl = "";
-              }
-
-              continue;
-            }
-
-            buffer += line;
-
-            if (buffer.endsWith('"}')) {
-              const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
-
-              if (
-                (validNDJSON.type === "classNames" ||
-                  validNDJSON.type === "message") &&
-                codeEncountered
-              ) {
-                fullResponse += "```" + "\n";
-                setStreamingMessage((prev) => prev + "```" + "\n");
-                codeEncountered = false;
-              }
-
-              if (
-                validNDJSON.type === "message" ||
-                validNDJSON.type === "code"
-              ) {
-                if (!codeEncountered && validNDJSON.type === "code") {
-                  codeEncountered = true;
-                  fullResponse += "```" + "\n";
-                  setStreamingMessage((prev) => prev + "```" + "\n");
+                  continue;
                 }
 
-                fullResponse += validNDJSON.content;
-                setStreamingMessage((prev) => prev + validNDJSON.content);
-              }
+                buffer += data;
 
-              buffer = "";
+                if (buffer.endsWith('"}')) {
+                  try {
+                    const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
+
+                    if (
+                      (validNDJSON.type === "classNames" ||
+                        validNDJSON.type === "message") &&
+                      codeEncountered
+                    ) {
+                      fullResponse += "```" + "\n";
+                      setStreamingMessage((prev) => prev + "```" + "\n");
+                      codeEncountered = false;
+                    }
+
+                    if (
+                      validNDJSON.type === "message" ||
+                      validNDJSON.type === "code"
+                    ) {
+                      if (!codeEncountered && validNDJSON.type === "code") {
+                        codeEncountered = true;
+                        fullResponse += "```" + "\n";
+                        setStreamingMessage((prev) => prev + "```" + "\n");
+                      }
+
+                      fullResponse += validNDJSON.content;
+                      setStreamingMessage((prev) => prev + validNDJSON.content);
+                    }
+
+                    buffer = "";
+                  } catch (parseErr) {
+                    console.error("Error parsing NDJSON:", parseErr);
+                    // Continue processing other lines instead of stopping
+                    buffer = "";
+                  }
+                }
+              } else {
+                if (
+                  line.includes("videoUrl") ||
+                  (line.includes("fileId") && line.includes("message"))
+                ) {
+                  videoUrl += line;
+
+                  console.log("VIDE URL");
+                  console.log(videoUrl);
+
+                  if (videoUrl.endsWith('"}')) {
+                    try {
+                      const video = JSON.parse(videoUrl.trim()) as TVideoBase64;
+                      dispatch(setVideoUrls([...videoUrls, video]));
+                      dispatch(setPreview(true));
+                      videoUrl = "";
+                    } catch (parseErr) {
+                      console.error("Error parsing video data:", parseErr);
+                      dispatch(setError("Error processing video data"));
+                    }
+                  }
+
+                  continue;
+                }
+
+                buffer += line;
+
+                if (buffer.endsWith('"}')) {
+                  try {
+                    const validNDJSON = JSON.parse(buffer) as TNDJSONStream;
+
+                    if (
+                      (validNDJSON.type === "classNames" ||
+                        validNDJSON.type === "message") &&
+                      codeEncountered
+                    ) {
+                      fullResponse += "```" + "\n";
+                      setStreamingMessage((prev) => prev + "```" + "\n");
+                      codeEncountered = false;
+                    }
+
+                    if (
+                      validNDJSON.type === "message" ||
+                      validNDJSON.type === "code"
+                    ) {
+                      if (!codeEncountered && validNDJSON.type === "code") {
+                        codeEncountered = true;
+                        fullResponse += "```" + "\n";
+                        setStreamingMessage((prev) => prev + "```" + "\n");
+                      }
+
+                      fullResponse += validNDJSON.content;
+                      setStreamingMessage((prev) => prev + validNDJSON.content);
+                    }
+
+                    buffer = "";
+                  } catch (parseErr) {
+                    console.error("Error parsing NDJSON:", parseErr);
+                    // Continue processing other lines instead of stopping
+                    buffer = "";
+                  }
+                }
+              }
+              console.log("fullResponse");
+              console.log(fullResponse);
+            } catch (lineErr) {
+              console.error("Error processing line:", lineErr);
+              // Continue with next line instead of stopping
+              continue;
             }
           }
-          console.log("fullResponse");
-          console.log(fullResponse);
+        } catch (readerErr) {
+          console.error("Error reading stream:", readerErr);
+          dispatch(setError("Error reading response stream"));
+          setStatus("error");
+          break;
         }
       }
     } catch (err) {
-      console.log(err);
       setStatus("error");
+
+      if (axios.isAxiosError(err)) {
+        if (err.code === "NETWORK_ERROR" || !err.response) {
+          dispatch(
+            setError(
+              "Network error. Please check your connection and try again."
+            )
+          );
+        } else if (err.response?.status === 500) {
+          dispatch(setError("Server error. Please try again later."));
+        } else if (err.response?.status === 429) {
+          dispatch(
+            setError("Too many requests. Please wait a moment and try again.")
+          );
+        } else {
+          dispatch(
+            setError(
+              `Request failed: ${err.response?.statusText || err.message}`
+            )
+          );
+        }
+      } else {
+        dispatch(setError("An unexpected error occurred. Please try again."));
+      }
     }
   };
 
   const previewCloseHandler = () => {
-    setVideoUrls([]);
-    setIsPreviewOpen(false);
+    dispatch(setVideoUrls([]));
+    dispatch(setPreview(false));
   };
 
   const newChatHandler = () => {
@@ -305,23 +384,33 @@ const Home = () => {
 
     setMessages([]);
     setModel("CLAUDE");
+    dispatch(setError(null));
     setSearchParams({ id: uuidV4() });
   };
 
   const prevChatHandler = async (id: string) => {
     if (searchParams.get("id") === id) return;
 
-    const chat = await getChatService(id);
+    try {
+      const chat = await getChatService(id);
 
-    if (!chat.success) return;
+      if (!chat.success) {
+        dispatch(setError(chat.message || "Failed to load previous chat"));
+        return;
+      }
 
-    setSearchParams({ id });
-    setMessages(
-      chat.data.map((c) => ({
-        role: c.role,
-        text: c.role === "user" ? c.content : parseContent(c.content),
-      }))
-    );
+      setSearchParams({ id });
+      setMessages(
+        chat.data.map((c) => ({
+          role: c.role,
+          text: c.role === "user" ? c.content : parseContent(c.content),
+        }))
+      );
+      dispatch(setError(null));
+    } catch (err) {
+      console.error("Error loading previous chat:", err);
+      dispatch(setError("Failed to load previous chat. Please try again."));
+    }
   };
 
   return (
@@ -335,6 +424,21 @@ const Home = () => {
       <CustomSidebar onNewChat={newChatHandler} onPrevChat={prevChatHandler}>
         <Container>
           <div className="flex flex-col h-full">
+            {/* Error Message Display */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                <div className="flex items-center justify-between">
+                  <span>{error}</span>
+                  <button
+                    onClick={() => dispatch(setError(null))}
+                    className="ml-4 text-red-500 hover:text-red-700 font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+
             {messages.length <= 0 && (
               <div className="flex-10 flex flex-col gap-4 items-center justify-center text-center">
                 <h1 className="font-bold text-5xl">{welcomeMessage.heading}</h1>

@@ -87,7 +87,10 @@ export const produceVideo = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      data: videoUrls,
+      data: videoUrls.map((url) => ({
+        videoUrl: url,
+        fileId: id.toString(),
+      })),
     });
   } catch (err) {
     console.log("Error produceVideo :", err);

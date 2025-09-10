@@ -1,9 +1,11 @@
 import { configureStore } from "@reduxjs/toolkit";
 import themeReducer from "./slices/themeSlice";
+import videoReducer from "./slices/videoSlice";
 
 export const store = configureStore({
   reducer: {
     theme: themeReducer,
+    video: videoReducer,
   },
 });
 

@@ -3,14 +3,19 @@ import axios, { isAxiosError } from "axios";
 type TProduceVideoResponse =
   | {
       success: true;
-      data: string[];
+      data: {
+        videoUrl: string;
+        fileId: string;
+      }[];
     }
   | {
       success: false;
       message: string;
     };
 
-export const produceVideoService = async (code: string) => {
+export const produceVideoService = async (
+  code: string
+): Promise<TProduceVideoResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
   try {
