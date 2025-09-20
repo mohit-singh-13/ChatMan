@@ -64,6 +64,7 @@ export const chat = async (req: Request, res: Response) => {
     const conversation = await prisma.allConversations.findUnique({
       where: {
         conversation_id: conversationId,
+        user_id: req.userId,
       },
     });
 
@@ -72,6 +73,7 @@ export const chat = async (req: Request, res: Response) => {
         data: {
           conversation_id: conversationId,
           title: userMessageToSave.slice(0, 20),
+          user_id: req.userId,
         },
       });
     }
@@ -269,6 +271,8 @@ export const chat = async (req: Request, res: Response) => {
 
     res.write("event: error\ndata: [DONE]\n\n");
     res.end();
+  } finally {
+    await prisma.$disconnect();
   }
 };
 
@@ -277,6 +281,9 @@ export const getAllChats = async (req: Request, res: Response) => {
 
   try {
     const chats = await prisma.allConversations.findMany({
+      where: {
+        user_id: req.userId,
+      },
       orderBy: {
         updated_at: "desc",
       },
@@ -328,6 +335,21 @@ export const getChat = async (req: Request, res: Response) => {
   const prisma = new PrismaClient();
 
   try {
+    const allConversations = await prisma.allConversations.findUnique({
+      where: {
+        conversation_id: conversationId,
+        user_id: req.userId,
+      },
+    });
+
+    if (!allConversations) {
+      res.status(404).json({
+        success: false,
+        message: "Conversation not found",
+      });
+      return;
+    }
+
     const chat = await prisma.conversation.findMany({
       where: {
         conversation_id: conversationId,
@@ -383,7 +405,10 @@ export const renameChat = async (req: Request, res: Response) => {
 
   try {
     const updated = await prisma.allConversations.update({
-      where: { conversation_id: conversationId },
+      where: {
+        conversation_id: conversationId,
+        user_id: req.userId,
+      },
       data: { title },
     });
 
@@ -431,6 +456,21 @@ export const deleteChat = async (req: Request, res: Response) => {
   const prisma = new PrismaClient();
 
   try {
+    const allConversations = await prisma.allConversations.findUnique({
+      where: {
+        conversation_id: conversationId,
+        user_id: req.userId,
+      },
+    });
+
+    if (!allConversations) {
+      res.status(404).json({
+        success: false,
+        message: "Conversation not found",
+      });
+      return;
+    }
+
     await prisma.conversation.deleteMany({
       where: { conversation_id: conversationId },
     });

@@ -6,17 +6,18 @@ import {
   getChat,
   renameChat,
 } from "../controllers/chat.controller";
+import { isUser } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
-router.post("/", chat);
+router.post("/", isUser, chat);
 
-router.get("/getAllChats", getAllChats);
+router.get("/getAllChats", isUser, getAllChats);
 
-router.get("/getChat/:conversationId", getChat);
+router.get("/getChat/:conversationId", isUser, getChat);
 
-router.put("/renameChat", renameChat);
+router.put("/renameChat", isUser, renameChat);
 
-router.delete("/deleteChat/:conversationId", deleteChat);
+router.delete("/deleteChat/:conversationId", isUser, deleteChat);
 
 export default router;

@@ -3,5 +3,6 @@ declare namespace NodeJS {
     PORT: string;
     ANTHROPIC_API_KEY: string;
     DEEPSEEK_OPEN_ROUTER_API_KEY: string;
+    JWT_SECRET: string;
   }
 }
