@@ -43,7 +43,6 @@ export const isUser = async (
       success: false,
       message: "You're unauthorized",
     });
-    return;
   } finally {
     await prisma.$disconnect();
   }

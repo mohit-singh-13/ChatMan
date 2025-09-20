@@ -33,7 +33,7 @@ export const produceVideoService = async (
     if (isAxiosError(err)) {
       return {
         success: false,
-        message: err.message,
+        message: err.response?.data.message,
       };
     }
 

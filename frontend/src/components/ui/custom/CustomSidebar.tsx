@@ -35,7 +35,8 @@ import {
   renameChatService,
 } from "@/services/chatServices";
 import ThemeToggle from "./ThemeToggle";
-import { useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { Button } from "../button";
 
 type TCustomSidebarProps = {
   onNewChat: () => void;
@@ -64,6 +65,8 @@ const CustomSidebar = ({
   const [selectedChat, setSelectedChat] = useState<string>(
     searchParams.get("id") || ""
   );
+  const navigate = useNavigate();
+  const isLoggedIn = !!localStorage.getItem("token");
 
   useEffect(() => {
     const getAllChats = async () => {
@@ -247,8 +250,26 @@ const CustomSidebar = ({
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
-            <SidebarMenuItem className="text-center">
-              <ThemeToggle />
+            <SidebarMenuItem className="px-4">
+              <div className="flex justify-between">
+                {isLoggedIn ? (
+                  <Button
+                    variant={"outline"}
+                    onClick={() => {
+                      localStorage.removeItem("token");
+                      navigate("/login");
+                    }}
+                    className="cursor-pointer"
+                  >
+                    Logout
+                  </Button>
+                ) : (
+                  <Button variant={"outline"} className="cursor-pointer">
+                    <Link to={"/login"}>Login</Link>
+                  </Button>
+                )}
+                <ThemeToggle />
+              </div>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

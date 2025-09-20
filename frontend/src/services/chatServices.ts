@@ -18,9 +18,23 @@ type TGetAllChatsResponse =
 export const getAllChatsService = async (): Promise<TGetAllChatsResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return {
+      success: false,
+      message: "Invalid token",
+    };
+  }
+
   try {
     const result = await axios.get<TGetAllChatsResponse>(
-      `${API_URL}/api/chat/getAllChats`
+      `${API_URL}/api/chat/getAllChats`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
 
     return result.data;
@@ -30,7 +44,7 @@ export const getAllChatsService = async (): Promise<TGetAllChatsResponse> => {
     if (isAxiosError(err)) {
       return {
         success: false,
-        message: err.message,
+        message: err.response?.data.message,
       };
     }
 
@@ -62,9 +76,23 @@ export const getChatService = async (
 ): Promise<TGetChatResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return {
+      success: false,
+      message: "Invalid token",
+    };
+  }
+
   try {
     const result = await axios.get<TGetChatResponse>(
-      `${API_URL}/api/chat/getChat/${conversationId}`
+      `${API_URL}/api/chat/getChat/${conversationId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
 
     return result.data;
@@ -74,7 +102,7 @@ export const getChatService = async (
     if (isAxiosError(err)) {
       return {
         success: false,
-        message: err.message,
+        message: err.response?.data.message,
       };
     }
 
@@ -105,12 +133,26 @@ export const renameChatService = async (
 ): Promise<TRenameChatResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return {
+      success: false,
+      message: "Invalid token",
+    };
+  }
+
   try {
     const result = await axios.put<TRenameChatResponse>(
       `${API_URL}/api/chat/renameChat`,
       {
         conversationId,
         title,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
     );
 
@@ -121,7 +163,7 @@ export const renameChatService = async (
     if (isAxiosError(err)) {
       return {
         success: false,
-        message: err.message,
+        message: err.response?.data.message,
       };
     }
 
@@ -142,9 +184,23 @@ export const deleteChatService = async (
 ): Promise<TDeleteChatResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return {
+      success: false,
+      message: "Invalid token",
+    };
+  }
+
   try {
     const result = await axios.delete<TDeleteChatResponse>(
-      `${API_URL}/api/chat/deleteChat/${conversationId}`
+      `${API_URL}/api/chat/deleteChat/${conversationId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
 
     return result.data;
@@ -154,7 +210,7 @@ export const deleteChatService = async (
     if (isAxiosError(err)) {
       return {
         success: false,
-        message: err.message,
+        message: err.response?.data.message,
       };
     }
 

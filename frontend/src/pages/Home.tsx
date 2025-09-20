@@ -26,7 +26,7 @@ import CustomLoader from "@/components/ui/custom/CustomLoader";
 import Preview from "@/components/ui/custom/Preview";
 import CustomSidebar from "@/components/ui/custom/CustomSidebar";
 import { v4 as uuidV4 } from "uuid";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { getChatService } from "@/services/chatServices";
 import parseContent from "@/utils/parseContent";
 import { useAppDispatch, useAppSelector } from "@/hooks/reduxHooks";
@@ -84,6 +84,7 @@ const Home = () => {
     (state) => state.video
   );
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const id = searchParams.get("id");
@@ -102,10 +103,7 @@ const Home = () => {
       try {
         const chat = await getChatService(id);
 
-        if (!chat.success) {
-          dispatch(setError(chat.message || "Failed to load chat history"));
-          return;
-        }
+        if (!chat.success) return;
 
         setMessages(
           chat.data.map((c) => ({
@@ -121,7 +119,7 @@ const Home = () => {
     };
 
     getChat(id);
-  }, [searchParams]);
+  }, [searchParams, dispatch]);
 
   const models = [
     {
@@ -137,6 +135,13 @@ const Home = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const isLoggedIn = !!localStorage.getItem("token");
+
+    if (!isLoggedIn) {
+      navigate("/login");
+      return;
+    }
+
     const conversationId = searchParams.get("id");
 
     if (!conversationId) {
@@ -151,11 +156,23 @@ const Home = () => {
 
     const messagesToSend = [...messages, { text: input, role: "user" }];
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      return;
+    }
+
+    const API_URL = import.meta.env.VITE_API_URL;
+
     try {
       const response = await axios.post<ReadableStream>(
-        "http://localhost:8080/api/chat",
+        `${API_URL}/api/chat`,
         { model, conversationId, messages: messagesToSend },
-        { responseType: "stream", adapter: "fetch" }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "stream",
+          adapter: "fetch",
+        }
       );
 
       setStatus("streaming");
@@ -360,11 +377,7 @@ const Home = () => {
             setError("Too many requests. Please wait a moment and try again.")
           );
         } else {
-          dispatch(
-            setError(
-              `Request failed: ${err.response?.statusText || err.message}`
-            )
-          );
+          dispatch(setError(`Request failed: ${"You're unauthorized"}`));
         }
       } else {
         dispatch(setError("An unexpected error occurred. Please try again."));
