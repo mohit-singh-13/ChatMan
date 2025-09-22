@@ -18,11 +18,25 @@ export const produceVideoService = async (
 ): Promise<TProduceVideoResponse> => {
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return {
+      success: false,
+      message: "Invalid token",
+    };
+  }
+
   try {
     const result = await axios.post<TProduceVideoResponse>(
       `${API_URL}/api/video/produceVideo`,
       {
         code,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
     );
 

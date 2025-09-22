@@ -47,10 +47,6 @@ const videoSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
-
-    clearError: (state) => {
-      state.error = null;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -97,6 +93,5 @@ export const {
   setPreview,
   setLoadingPreview,
   setError,
-  clearError,
 } = videoSlice.actions;
 export default videoSlice.reducer;
